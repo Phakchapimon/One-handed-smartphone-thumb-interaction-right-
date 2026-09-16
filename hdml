@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Fitts' Law: Thumb Interaction Experiment</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --accent-success: #22c55e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #app-container {
+      width: 100vw;
+      max-width: 430px;
+      height: 100vh;
+      max-height: 932px;
+      background-color: var(--card-bg);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    header {
+      padding: 16px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    p.subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 23, 42, 0.92);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .instructions {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    .instructions strong {
+      color: var(--text-main);
+    }
+
+    .btn {
+      background-color: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.4);
+      transition: transform 0.1s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn-success {
+      background-color: var(--accent-success);
+      box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+      color: #ffffff;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <header>
+      <h1>Mobile Fitts' Law Experiment</h1>
+      <p class="subtitle">One-Handed Thumb Interaction Study</p>
+    </header>
+
+    <div id="hud">
+      <span id="trial-count">Trial: 0 / 12</span>
+      <span id="status-text">Tap Start Zone</span>
+    </div>
+
+    <div id="canvas-container">
+      <canvas id="experimentCanvas"></canvas>
+      
+      <div id="overlay">
+        <h2 id="overlay-title" style="margin-bottom: 12px;">Mobile Thumb Study</h2>
+        <p class="instructions" id="overlay-desc">
+          Hold your phone with <strong>one hand only</strong> and use <strong>ONLY your thumb</strong> to perform the trials.<br/><br/>
+          1. Tap the green <strong>Start Zone</strong> at the bottom.<br/>
+          2. Tap the red <strong>Target Circle</strong> as fast and accurately as possible.<br/>
+          3. Repeat for all 12 trials.
+        </p>
+        <button id="start-btn" class="btn">Start Experiment</button>
+        <button id="export-btn" class="btn btn-success hidden">Download CSV Data</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('experimentCanvas');
+    const ctx = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlay-title');
+    const overlayDesc = document.getElementById('overlay-desc');
+    const startBtn = document.getElementById('start-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const trialCountEl = document.getElementById('trial-count');
+    const statusTextEl = document.getElementById('status-text');
+
+    let width, height;
+    let currentTrial = 0;
+    let state = 'IDLE'; // IDLE, WAITING_FOR_START, WAITING_FOR_TARGET, FINISHED
+    let startTime = 0;
+    
+    const results = [];
+
+    // Experimental Conditions (A: Distance in px, W: Width in px)
+    const conditions = [
+      { A: 180, W: 70 },
+      { A: 320, W: 70 },
+      { A: 480, W: 70 },
+      { A: 180, W: 45 },
+      { A: 320, W: 45 },
+      { A: 480, W: 45 },
+      { A: 180, W: 30 },
+      { A: 320, W: 30 },
+      { A: 480, W: 30 },
+      { A: 250, W: 60 },
+      { A: 400, W: 40 },
+      { A: 500, W: 35 }
+    ];
+
+    // Shuffle conditions
+    const trials = conditions.sort(() => Math.random() - 0.5);
+
+    let startZone = { x: 0, y: 0, r: 35 };
+    let activeTarget = { x: 0, y: 0, r: 0, A: 0, W: 0, ID: 0 };
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      canvas.width = width;
+      canvas.height = height;
+
+      // Position Start Zone near bottom center (Thumb resting zone)
+      startZone.x = width / 2;
+      startZone.y = height - 80;
+      
+      if (state !== 'IDLE' && state !== 'FINISHED') {
+        draw();
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    function setupTrial() {
+      if (currentTrial >= trials.length) {
+        finishExperiment();
+        return;
+      }
+
+      const condition = trials[currentTrial];
+      const A = condition.A;
+      const W = condition.W;
+      const ID = Math.log2((A / W) + 1);
+
+      // Target position calculated directly upward along the primary thumb sweep axis
+      const targetX = width / 2;
+      const targetY = startZone.y - A;
+
+      activeTarget = {
+        x: targetX,
+        y: targetY,
+        r: W / 2,
+        A: A,
+        W: W,
+        ID: ID
+      };
+
+      state = 'WAITING_FOR_START';
+      statusTextEl.innerText = 'Tap Start Zone';
+      trialCountEl.innerText = `Trial: ${currentTrial + 1} / ${trials.length}`;
+      draw();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw Start Zone
+      ctx.beginPath();
+      ctx.arc(startZone.x, startZone.y, startZone.r, 0, Math.PI * 2);
+      ctx.fillStyle = state === 'WAITING_FOR_START' ? '#22c55e' : '#334155';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#86efac';
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('START', startZone.x, startZone.y);
+
+      // Draw Target Circle if waiting for target tap
+      if (state === 'WAITING_FOR_TARGET') {
+        ctx.beginPath();
+        ctx.arc(activeTarget.x, activeTarget.y, activeTarget.r, 0, Math.PI * 2);
+        ctx.fillStyle = '#ef4444';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fca5a5';
+        ctx.stroke();
+      }
+    }
+
+    function handlePointerDown(e) {
+      const rect = canvas.getBoundingClientRect();
+      const touchX = e.clientX - rect.left;
+      const touchY = e.clientY - rect.top;
+
+      if (state === 'WAITING_FOR_START') {
+        const dist = Math.hypot(touchX - startZone.x, touchY - startZone.y);
+        if (dist <= startZone.r) {
+          state = 'WAITING_FOR_TARGET';
+          startTime = performance.now();
+          statusTextEl.innerText = 'Tap Red Target!';
+          draw();
+        }
+      } else if (state === 'WAITING_FOR_TARGET') {
+        const dist = Math.hypot(touchX - activeTarget.x, touchY - activeTarget.y);
+        if (dist <= activeTarget.r) {
+          const endTime = performance.now();
+          const MT = Math.round(endTime - startTime);
+
+          results.push({
+            Trial: currentTrial + 1,
+            Distance_A_px: activeTarget.A,
+            Width_W_px: activeTarget.W,
+            ID_bits: activeTarget.ID.toFixed(2),
+            MovementTime_ms: MT
+          });
+
+          currentTrial++;
+          setupTrial();
+        }
+      }
+    }
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+
+    startBtn.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      currentTrial = 0;
+      results.length = 0;
+      resizeCanvas();
+      setupTrial();
+    });
+
+    function finishExperiment() {
+      state = 'FINISHED';
+      ctx.clearRect(0, 0, width, height);
+      statusTextEl.innerText = 'Complete';
+      
+      overlayTitle.innerText = "Experiment Complete!";
+      overlayDesc.innerHTML = "You have finished all 12 trials.<br/>Download your CSV file to perform your regression analysis.";
+      startBtn.classList.add('hidden');
+      exportBtn.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+    }
+
+    exportBtn.addEventListener('click', () => {
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Trial,Distance_A_px,Width_W_px,ID_bits,MovementTime_ms\n";
+
+      results.forEach(row => {
+        csvContent += `${row.Trial},${row.Distance_A_px},${row.Width_W_px},${row.ID_bits},${row.MovementTime_ms}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "fitts_law_thumb_data.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
+    // Initial setup
+    resizeCanvas();
+  </script>
+</body>
+</html>
