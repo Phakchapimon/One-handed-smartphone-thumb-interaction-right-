@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Fitts' Law: Thumb Interaction Experiment</title>
+  <title>Fitts' Law: Thumb Interaction Experiment (100 Trials)</title>
   <style>
     :root {
       --bg-color: #0f172a;
@@ -47,7 +47,7 @@
     }
 
     header {
-      padding: 16px;
+      padding: 14px;
       text-align: center;
       background: rgba(15, 23, 42, 0.6);
       backdrop-filter: blur(8px);
@@ -94,7 +94,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(15, 23, 42, 0.92);
+      background: rgba(15, 23, 42, 0.94);
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -147,12 +147,12 @@
 
   <div id="app-container">
     <header>
-      <h1>Mobile Fitts' Law Experiment</h1>
-      <p class="subtitle">One-Handed Thumb Interaction Study</p>
+      <h1>Mobile Fitts' Law Study</h1>
+      <p class="subtitle">One-Handed Thumb Interaction (100 Trials)</p>
     </header>
 
     <div id="hud">
-      <span id="trial-count">Trial: 0 / 12</span>
+      <span id="trial-count">Trial: 0 / 100</span>
       <span id="status-text">Tap Start Zone</span>
     </div>
 
@@ -162,13 +162,13 @@
       <div id="overlay">
         <h2 id="overlay-title" style="margin-bottom: 12px;">Mobile Thumb Study</h2>
         <p class="instructions" id="overlay-desc">
-          Hold your phone with <strong>one hand only</strong> and use <strong>ONLY your thumb</strong> to perform the trials.<br/><br/>
-          1. Tap the green <strong>Start Zone</strong> at the bottom.<br/>
+          Hold your phone with <strong>one hand only</strong> and use <strong>ONLY your thumb</strong>.<br/><br/>
+          1. Tap the green <strong>Start Zone</strong> at the bottom to begin.<br/>
           2. Tap the red <strong>Target Circle</strong> as fast and accurately as possible.<br/>
-          3. Repeat for all 12 trials.
+          3. Complete all <strong>100 trials</strong>.
         </p>
-        <button id="start-btn" class="btn">Start Experiment</button>
-        <button id="export-btn" class="btn btn-success hidden">Download CSV Data</button>
+        <button id="start-btn" class="btn">Start 100 Trials</button>
+        <button id="export-btn" class="btn btn-success hidden">Download 100-Trial CSV</button>
       </div>
     </div>
   </div>
@@ -186,29 +186,26 @@
 
     let width, height;
     let currentTrial = 0;
-    let state = 'IDLE'; // IDLE, WAITING_FOR_START, WAITING_FOR_TARGET, FINISHED
+    const TOTAL_TRIALS = 100;
+    let state = 'IDLE'; 
     let startTime = 0;
     
     const results = [];
+    const trials = [];
 
-    // Experimental Conditions (A: Distance in px, W: Width in px)
-    const conditions = [
-      { A: 180, W: 70 },
-      { A: 320, W: 70 },
-      { A: 480, W: 70 },
-      { A: 180, W: 45 },
-      { A: 320, W: 45 },
-      { A: 480, W: 45 },
-      { A: 180, W: 30 },
-      { A: 320, W: 30 },
-      { A: 480, W: 30 },
-      { A: 250, W: 60 },
-      { A: 400, W: 40 },
-      { A: 500, W: 35 }
-    ];
+    // Base conditions pools
+    const distances = [180, 260, 340, 420, 500]; // A values in px
+    const widths = [25, 35, 50, 70];            // W values in px
 
-    // Shuffle conditions
-    const trials = conditions.sort(() => Math.random() - 0.5);
+    // Generate 100 balanced trials
+    function generate100Trials() {
+      trials.length = 0;
+      for (let i = 0; i < TOTAL_TRIALS; i++) {
+        const randomA = distances[Math.floor(Math.random() * distances.length)];
+        const randomW = widths[Math.floor(Math.random() * widths.length)];
+        trials.push({ A: randomA, W: randomW });
+      }
+    }
 
     let startZone = { x: 0, y: 0, r: 35 };
     let activeTarget = { x: 0, y: 0, r: 0, A: 0, W: 0, ID: 0 };
@@ -220,7 +217,6 @@
       canvas.width = width;
       canvas.height = height;
 
-      // Position Start Zone near bottom center (Thumb resting zone)
       startZone.x = width / 2;
       startZone.y = height - 80;
       
@@ -232,7 +228,7 @@
     window.addEventListener('resize', resizeCanvas);
 
     function setupTrial() {
-      if (currentTrial >= trials.length) {
+      if (currentTrial >= TOTAL_TRIALS) {
         finishExperiment();
         return;
       }
@@ -242,7 +238,6 @@
       const W = condition.W;
       const ID = Math.log2((A / W) + 1);
 
-      // Target position calculated directly upward along the primary thumb sweep axis
       const targetX = width / 2;
       const targetY = startZone.y - A;
 
@@ -257,7 +252,7 @@
 
       state = 'WAITING_FOR_START';
       statusTextEl.innerText = 'Tap Start Zone';
-      trialCountEl.innerText = `Trial: ${currentTrial + 1} / ${trials.length}`;
+      trialCountEl.innerText = `Trial: ${currentTrial + 1} / ${TOTAL_TRIALS}`;
       draw();
     }
 
@@ -279,7 +274,7 @@
       ctx.textBaseline = 'middle';
       ctx.fillText('START', startZone.x, startZone.y);
 
-      // Draw Target Circle if waiting for target tap
+      // Draw Target
       if (state === 'WAITING_FOR_TARGET') {
         ctx.beginPath();
         ctx.arc(activeTarget.x, activeTarget.y, activeTarget.r, 0, Math.PI * 2);
@@ -330,6 +325,7 @@
       overlay.classList.add('hidden');
       currentTrial = 0;
       results.length = 0;
+      generate100Trials();
       resizeCanvas();
       setupTrial();
     });
@@ -339,8 +335,8 @@
       ctx.clearRect(0, 0, width, height);
       statusTextEl.innerText = 'Complete';
       
-      overlayTitle.innerText = "Experiment Complete!";
-      overlayDesc.innerHTML = "You have finished all 12 trials.<br/>Download your CSV file to perform your regression analysis.";
+      overlayTitle.innerText = "100 Trials Complete!";
+      overlayDesc.innerHTML = "You have completed all 100 trials.<br/>Download your dataset to perform your linear regression analysis.";
       startBtn.classList.add('hidden');
       exportBtn.classList.remove('hidden');
       overlay.classList.remove('hidden');
@@ -357,13 +353,12 @@
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "fitts_law_thumb_data.csv");
+      link.setAttribute("download", "fitts_law_100_trials_thumb_data.csv");
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     });
 
-    // Initial setup
     resizeCanvas();
   </script>
 </body>
